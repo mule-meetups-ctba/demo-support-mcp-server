@@ -1,0 +1,22 @@
+{
+  "minMuleVersion": "4.12.0",
+  "javaSpecificationVersions": ["17"],
+  "configs": [
+    "global-config.xml",
+    "support-tools.xml"
+  ],
+  "secureProperties": [
+    "orders.clientSecret",
+    "stripe.api.key",
+    "salesforce.password",
+    "salesforce.token",
+    "slack.bot.token"
+  ],
+  "classLoaderModelLoaderDescriptor": {
+    "id": "mule",
+    "attributes": {
+      "exportedPackages": [],
+      "exportedResources": []
+    }
+  }
+}

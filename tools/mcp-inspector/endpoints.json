@@ -1,0 +1,26 @@
+{
+  "direct": {
+    "name": "Direct MCP Server",
+    "transport": "streamable-http",
+    "url": "https://<app-demo-support-mcp-server-host>.cloudhub.io/mcp",
+    "description": "Direct CloudHub endpoint for the TechWave Support MCP Server."
+  },
+  "ingress": {
+    "name": "MCP via Public Ingress Omni Gateway",
+    "transport": "streamable-http",
+    "url": "https://<meetup-ingress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp",
+    "description": "Public Omni Gateway route for the MCP server. Add client_id/client_secret headers if policies require them."
+  },
+  "egress": {
+    "name": "MCP via Private Egress Omni Gateway",
+    "transport": "streamable-http",
+    "url": "https://<meetup-egress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp",
+    "description": "Private egress route. Usually reachable only from inside the CloudHub Private Space."
+  },
+  "agentNetworkEgress": {
+    "name": "Agent Network MCP Connection",
+    "transport": "streamable-http",
+    "url": "https://<meetup-egress-gw-host>.cloudhub.io/9db424b9-11da-4408-b49e-8e944a38666a/mcpServer/mcpServerConnection",
+    "description": "Generated Agent Network connection route used by the broker."
+  }
+}

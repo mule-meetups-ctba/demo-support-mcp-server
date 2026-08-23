@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:mcp="http://www.mulesoft.org/schema/mule/mcp"
+      xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+          http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http
+          http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/mcp
+          http://www.mulesoft.org/schema/mule/mcp/current/mule-mcp.xsd
+        http://www.mulesoft.org/schema/mule/salesforce
+          http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+        http://www.mulesoft.org/schema/mule/secure-properties
+          http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+
+  <configuration-properties file="config-${config.environment}.yaml"
+    doc:name="Environment properties"
+    doc:description="Loads config-${config.environment}.yaml with per-environment hosts, ports and gateway client id"/>
+
+  <secure-properties:config name="secure-config"
+    file="secure-config-${config.environment}.yaml"
+    key="${encryption.key}"
+    doc:name="Secure Properties"
+    doc:description="Decrypts the secrets in secure-config-${config.environment}.yaml using the runtime encryption key">
+    <secure-properties:encrypt algorithm="AES" mode="CBC"/>
+  </secure-properties:config>
+
+
+  <http:listener-config name="mcp-http-listener-config"
+    doc:name="MCP HTTP Listener"
+    doc:description="Inbound HTTP listener that exposes the MCP server endpoint behind the ingress Omni Gateway">
+    <http:listener-connection host="0.0.0.0" port="${config.http.port}"/>
+  </http:listener-config>
+
+  <!-- MCP Server (Streamable HTTP) — exposto atrás do Managed Omni GW -->
+  <mcp:server-config name="techwave-mcp-server-config"
+    doc:name="TechWave Support MCP Server"
+    doc:description="MCP server (Streamable HTTP) on /mcp exposing the TechWave support tools to the agent"
+    serverName="TechWave Support MCP Server" serverVersion="1.0.0">
+    <mcp:streamable-http-server-connection listenerConfig="mcp-http-listener-config" mcpEndpointPath="/mcp"/>
+  </mcp:server-config>
+
+  <!-- Order Support API (via ingress Omni GW, dentro do Private Space) -->
+  <!-- <http:request-config name="orders-api-request-config" basePath="${config.orders.basePath}"
+    doc:name="Order Support API"
+    doc:description="Outbound HTTPS client for the Order Support API behind the ingress GW, with client id/secret enforcement">
+    <http:request-connection host="${config.orders.host}" protocol="HTTPS" port="443"/>
+    <http:default-headers>
+      <http:default-header key="client_id" value="${config.orders.clientId}"/>
+      <http:default-header key="client_secret" value="${secure::orders.clientSecret}"/>
+    </http:default-headers>
+  </http:request-config> -->
+  <http:request-config name="orders-api-request-config" basePath="${config.orders.basePath}"
+    doc:name="Order Support API"
+    doc:description="Outbound HTTPS client for the Order Support API behind the ingress GW, with client id/secret enforcement">
+    <http:request-connection host="${config.orders.host}" protocol="HTTPS" port="443"/>
+    <http:default-headers>
+      <http:default-header key="client_id" value="${config.orders.clientId}"/>
+      <http:default-header key="client_secret" value="${secure::orders.clientSecret}"/>
+    </http:default-headers>
+  </http:request-config>
+
+  <!-- Stripe (test mode) -->
+  <http:request-config name="stripe-request-config" basePath="${config.stripe.basePath}"
+    doc:name="Stripe API"
+    doc:description="Outbound HTTPS client for the Stripe API (test mode), authenticated with the secure Stripe API key">
+    <http:request-connection host="${config.stripe.host}" protocol="HTTPS" port="443"/>
+    <http:default-headers>
+      <http:default-header key="Authorization" value="Bearer ${secure::stripe.api.key}"/>
+    </http:default-headers>
+  </http:request-config>
+
+  <!-- Salesforce Developer Edition -->
+  <salesforce:sfdc-config name="salesforce-config"
+    doc:name="Salesforce Dev Org"
+    doc:description="Salesforce Developer Edition connection used to create support Cases, authenticated via secure password and token">
+    <salesforce:basic-connection
+      username="${config.salesforce.username}"
+      password="${secure::salesforce.password}"
+      securityToken="${secure::salesforce.token}"/>
+  </salesforce:sfdc-config>
+
+  <!-- Slack Web API -->
+  <http:request-config name="slack-request-config" basePath="/api"
+    doc:name="Slack API"
+    doc:description="Outbound HTTPS client for the Slack Web API, authenticated with the secure bot token">
+    <http:request-connection host="${config.slack.host}" protocol="HTTPS" port="443"/>
+    <http:default-headers>
+      <http:default-header key="Authorization" value="Bearer ${secure::slack.bot.token}"/>
+    </http:default-headers>
+  </http:request-config>
+
+</mule>

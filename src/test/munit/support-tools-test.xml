@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+          http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit
+          http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools
+          http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+  <munit:config name="support-tools-test.xml"/>
+
+  <munit:test name="create-case-success-test" description="create-support-case retorna caseId quando Salesforce responde com sucesso">
+    <munit:behavior>
+      <munit-tools:mock-when processor="salesforce:create">
+        <munit-tools:then-return>
+          <munit-tools:payload value="#[output application/java --- {
+            items: [{ id: '500XXFAKECASEIDXXX', successful: true }]
+          }]"/>
+        </munit-tools:then-return>
+      </munit-tools:mock-when>
+    </munit:behavior>
+    <munit:execution>
+      <set-payload value="#[output application/java --- {
+        orderId: 'TW-1002',
+        subject: 'Monitor chegou com defeito',
+        description: 'Cliente relata pixels mortos no monitor 27in do pedido TW-1002.',
+        priority: 'High'
+      }]"/>
+      <flow-ref name="support-tools-create-case-flow"/>
+    </munit:execution>
+    <munit:validation>
+      <munit-tools:assert-that expression="#[payload.caseId]" is="#[MunitTools::equalTo('500XXFAKECASEIDXXX')]"/>
+      <munit-tools:assert-that expression="#[payload.success]" is="#[MunitTools::equalTo(true)]"/>
+    </munit:validation>
+  </munit:test>
+
+  <munit:test name="refund-payment-success-test" description="refund-payment mapeia resposta do Stripe">
+    <munit:behavior>
+      <munit-tools:mock-when processor="http:request">
+        <munit-tools:then-return>
+          <munit-tools:payload value="#[output application/java --- {
+            id: 're_fake123', status: 'succeeded', amount: 37900, currency: 'usd'
+          }]"/>
+        </munit-tools:then-return>
+      </munit-tools:mock-when>
+    </munit:behavior>
+    <munit:execution>
+      <set-payload value="#[output application/java --- {
+        paymentIntentId: 'pi_fake123', reason: 'requested_by_customer'
+      }]"/>
+      <flow-ref name="support-tools-refund-payment-flow"/>
+    </munit:execution>
+    <munit:validation>
+      <munit-tools:assert-that expression="#[payload.refundId]" is="#[MunitTools::equalTo('re_fake123')]"/>
+      <munit-tools:assert-that expression="#[payload.amount]" is="#[MunitTools::equalTo(379.00)]"/>
+    </munit:validation>
+  </munit:test>
+
+</mule>

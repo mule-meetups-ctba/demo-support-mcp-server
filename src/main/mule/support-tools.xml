@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:mcp="http://www.mulesoft.org/schema/mule/mcp"
+      xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+          http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http
+          http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/mcp
+          http://www.mulesoft.org/schema/mule/mcp/current/mule-mcp.xsd
+        http://www.mulesoft.org/schema/mule/salesforce
+          http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+        http://www.mulesoft.org/schema/mule/ee/core
+          http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+  <!-- ============================================================
+       TOOL 1: get-order-status
+       Consulta a Order Support API (atrás do ingress Omni GW)
+       ============================================================ -->
+  <flow name="support-tools-get-order-status-flow"
+    doc:name="Get Order Status Tool"
+    doc:description="MCP tool that looks up a TechWave order via the Order Support API behind the ingress GW">
+    <mcp:tool-listener config-ref="techwave-mcp-server-config" name="get-order-status"
+      doc:name="Tool: get-order-status"
+      doc:description="Exposes get-order-status as an MCP tool that returns a TechWave order's status, items and payment">
+      <mcp:description>Retorna o status de um pedido TechWave, incluindo itens, cliente e situação do pagamento. Use sempre que o cliente perguntar sobre um pedido.</mcp:description>
+      <mcp:parameters-schema><![CDATA[{
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Identificador do pedido, formato TW-NNNN (ex.: TW-1001)",
+            "pattern": "^TW-[0-9]{4}$"
+          }
+        },
+        "required": ["orderId"]
+      }]]></mcp:parameters-schema>
+      <mcp:responses>
+        <mcp:text-tool-response-content text="#[payload.^raw]"/>
+      </mcp:responses>
+      <mcp:on-error-responses>
+        <mcp:text-tool-response-content text="#['Erro ao consultar pedido: $(error.description)']"/>
+      </mcp:on-error-responses>
+    </mcp:tool-listener>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow start"
+      doc:description="Logs START tracePoint with the requested orderId"
+      message="#[output application/json --- {message: 'Tool get-order-status invoked', tracePoint: 'START'} ++ ({ orderId: payload.orderId })]"/>
+
+    <set-variable variableName="orderId" value="#[payload.orderId]"
+      doc:name="Set orderId"
+      doc:description="Stores the tool input orderId into a flow variable"/>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Before Orders API call"
+      doc:description="Logs BEFORE_REQUEST as the flow calls the Order Support API"
+      message="#[output application/json --- {message: 'Calling Order Support API for ' ++ vars.orderId, tracePoint: 'BEFORE_REQUEST'}]"/>
+
+    <http:request config-ref="orders-api-request-config" method="GET" path="#['/orders/' ++ vars.orderId]"
+      doc:name="Call Order Support API"
+      doc:description="GETs /orders/{orderId} from the Order Support API behind the ingress GW"/>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="After Orders API call"
+      doc:description="Logs AFTER_REQUEST once the Order Support API has responded"
+      message="#[output application/json --- {message: 'Order Support API responded for ' ++ vars.orderId, tracePoint: 'AFTER_REQUEST'}]"/>
+
+    <ee:transform doc:name="To JSON string"
+      doc:description="Serialises the order payload to a JSON string for the MCP tool response">
+      <ee:message>
+        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+      </ee:message>
+    </ee:transform>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow end"
+      doc:description="Logs END tracePoint for the get-order-status tool"
+      message="#[output application/json --- {message: 'Tool get-order-status completed', tracePoint: 'END'} ++ ({ orderId: vars.orderId })]"/>
+
+    <error-handler>
+      <on-error-propagate type="ANY" logException="false">
+        <logger level="ERROR" category="com.techwave.support.tools"
+          doc:name="Log tool error"
+          doc:description="Logs EXCEPTION tracePoint with the error type and description before propagating"
+          message="#[output application/json --- {message: 'get-order-status failed: ' ++ error.description, tracePoint: 'EXCEPTION'} ++ ({
+            orderId: vars.orderId default 'unknown',
+            errorType: error.errorType.identifier default 'UNKNOWN',
+            errorDescription: error.description
+          })]"/>
+      </on-error-propagate>
+    </error-handler>
+  </flow>
+
+  <!-- ============================================================
+       TOOL 2: create-support-case (Salesforce Developer Edition)
+       ============================================================ -->
+  <flow name="support-tools-create-case-flow"
+    doc:name="Create Support Case Tool"
+    doc:description="MCP tool that opens a Salesforce Case for a TechWave order needing human follow-up">
+    <mcp:tool-listener config-ref="techwave-mcp-server-config" name="create-support-case"
+      doc:name="Tool: create-support-case"
+      doc:description="Exposes create-support-case as an MCP tool that creates a Salesforce support Case">
+      <mcp:description>Abre um Case de suporte no Salesforce para um pedido TechWave. Use quando o cliente reportar um problema que exija acompanhamento humano.</mcp:description>
+      <mcp:parameters-schema><![CDATA[{
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "orderId":     { "type": "string", "description": "Pedido relacionado (ex.: TW-1001)", "pattern": "^TW-[0-9]{4}$" },
+          "subject":     { "type": "string", "description": "Resumo curto do problema", "minLength": 5, "maxLength": 100 },
+          "description": { "type": "string", "description": "Descrição detalhada do problema relatado pelo cliente", "minLength": 10, "maxLength": 2000 },
+          "priority":    { "type": "string", "description": "Prioridade do case", "enum": ["Low", "Medium", "High"] }
+        },
+        "required": ["orderId", "subject", "description", "priority"]
+      }]]></mcp:parameters-schema>
+      <mcp:responses>
+        <mcp:text-tool-response-content text="#['Case criado no Salesforce. Id: $(payload.caseId)']"/>
+      </mcp:responses>
+      <mcp:on-error-responses>
+        <mcp:text-tool-response-content text="#['Erro ao criar case: $(error.description)']"/>
+      </mcp:on-error-responses>
+    </mcp:tool-listener>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow start"
+      doc:description="Logs START tracePoint with the order id and priority of the new Case"
+      message="#[output application/json --- {message: 'Tool create-support-case invoked', tracePoint: 'START'} ++ ({ orderId: payload.orderId, priority: payload.priority })]"/>
+
+    <set-variable variableName="toolInput" value="#[payload]"
+      doc:name="Set toolInput"
+      doc:description="Stores the full tool input (orderId, subject, description, priority) for downstream use"/>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Before Salesforce call"
+      doc:description="Logs BEFORE_REQUEST as the flow creates the Case in Salesforce"
+      message="#[output application/json --- {message: 'Creating Case in Salesforce', tracePoint: 'BEFORE_REQUEST'}]"/>
+
+    <salesforce:create type="Case" config-ref="salesforce-config"
+      doc:name="Create Case"
+      doc:description="Creates a Salesforce Case from the tool input, prefixing the subject with the order id">
+      <salesforce:records><![CDATA[#[output application/java
+---
+[{
+  Subject: "[" ++ vars.toolInput.orderId ++ "] " ++ vars.toolInput.subject,
+  Description: vars.toolInput.description,
+  Priority: vars.toolInput.priority,
+  Origin: "Web",
+  Status: "New"
+}]
+]]]></salesforce:records>
+    </salesforce:create>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="After Salesforce call"
+      doc:description="Logs AFTER_REQUEST once Salesforce has created the Case"
+      message="#[output application/json --- {message: 'Salesforce Case created', tracePoint: 'AFTER_REQUEST'}]"/>
+
+    <ee:transform doc:name="Build tool result"
+      doc:description="Builds the JSON tool result with the new caseId, success flag and order id">
+      <ee:message>
+        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  caseId: payload.items[0].id,
+  success: payload.items[0].successful,
+  orderId: vars.toolInput.orderId
+}]]></ee:set-payload>
+      </ee:message>
+    </ee:transform>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow end"
+      doc:description="Logs END tracePoint with the order id and created caseId"
+      message="#[output application/json --- {message: 'Tool create-support-case completed', tracePoint: 'END'} ++ ({ orderId: vars.toolInput.orderId, caseId: payload.caseId })]"/>
+
+    <error-handler>
+      <on-error-propagate type="ANY" logException="false">
+        <logger level="ERROR" category="com.techwave.support.tools"
+          doc:name="Log tool error"
+          doc:description="Logs EXCEPTION tracePoint with the error type and description before propagating"
+          message="#[output application/json --- {message: 'create-support-case failed: ' ++ error.description, tracePoint: 'EXCEPTION'} ++ ({
+            orderId: vars.toolInput.orderId default 'unknown',
+            errorType: error.errorType.identifier default 'UNKNOWN',
+            errorDescription: error.description
+          })]"/>
+      </on-error-propagate>
+    </error-handler>
+  </flow>
+
+  <!-- ============================================================
+       TOOL 3: refund-payment (Stripe test mode)
+       ============================================================ -->
+  <flow name="support-tools-refund-payment-flow"
+    doc:name="Refund Payment Tool"
+    doc:description="MCP tool that creates a full Stripe refund (test mode) for an order's PaymentIntent">
+    <mcp:tool-listener config-ref="techwave-mcp-server-config" name="refund-payment"
+      doc:name="Tool: refund-payment"
+      doc:description="Exposes refund-payment as an MCP tool that issues a full Stripe refund for a PaymentIntent">
+      <mcp:description>Cria um reembolso total no Stripe para o pagamento de um pedido. Use apenas após confirmar com o cliente que ele deseja o reembolso.</mcp:description>
+      <mcp:parameters-schema><![CDATA[{
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "paymentIntentId": { "type": "string", "description": "Id do PaymentIntent no Stripe (ex.: pi_3Abc...)", "pattern": "^pi_[A-Za-z0-9_]+$" },
+          "reason":          { "type": "string", "description": "Motivo do reembolso", "enum": ["duplicate", "fraudulent", "requested_by_customer"] }
+        },
+        "required": ["paymentIntentId", "reason"]
+      }]]></mcp:parameters-schema>
+      <mcp:responses>
+        <mcp:text-tool-response-content text="#['Reembolso criado. Id: $(payload.refundId), status: $(payload.status)']"/>
+      </mcp:responses>
+      <mcp:on-error-responses>
+        <mcp:text-tool-response-content text="#['Erro ao criar reembolso: $(error.description)']"/>
+      </mcp:on-error-responses>
+    </mcp:tool-listener>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow start"
+      doc:description="Logs START tracePoint with the PaymentIntent id and refund reason"
+      message="#[output application/json --- {message: 'Tool refund-payment invoked', tracePoint: 'START'} ++ ({ paymentIntentId: payload.paymentIntentId, reason: payload.reason })]"/>
+
+    <set-variable variableName="toolInput" value="#[payload]"
+      doc:name="Set toolInput"
+      doc:description="Stores the tool input (paymentIntentId, reason) for the refund request"/>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Before Stripe call"
+      doc:description="Logs BEFORE_REQUEST as the flow creates the Stripe refund"
+      message="#[output application/json --- {message: 'Creating refund for ' ++ vars.toolInput.paymentIntentId, tracePoint: 'BEFORE_REQUEST'}]"/>
+
+    <http:request config-ref="stripe-request-config" method="POST" path="/refunds"
+      doc:name="Create Stripe refund"
+      doc:description="POSTs a full refund to Stripe for the given PaymentIntent and reason">
+      <http:body><![CDATA[#[output application/x-www-form-urlencoded
+---
+{
+  payment_intent: vars.toolInput.paymentIntentId,
+  reason: vars.toolInput.reason
+}]]]></http:body>
+    </http:request>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="After Stripe call"
+      doc:description="Logs AFTER_REQUEST once Stripe has created the refund"
+      message="#[output application/json --- {message: 'Stripe refund created', tracePoint: 'AFTER_REQUEST'}]"/>
+
+    <ee:transform doc:name="Build tool result"
+      doc:description="Builds the JSON tool result with the refund id, status and amount in major units">
+      <ee:message>
+        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  refundId: payload.id,
+  status: payload.status,
+  amount: (payload.amount default 0) / 100,
+  currency: upper(payload.currency default "usd")
+}]]></ee:set-payload>
+      </ee:message>
+    </ee:transform>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow end"
+      doc:description="Logs END tracePoint with the refund id and status"
+      message="#[output application/json --- {message: 'Tool refund-payment completed', tracePoint: 'END'} ++ ({ refundId: payload.refundId, status: payload.status })]"/>
+
+    <error-handler>
+      <on-error-propagate type="ANY" logException="false">
+        <logger level="ERROR" category="com.techwave.support.tools"
+          doc:name="Log tool error"
+          doc:description="Logs EXCEPTION tracePoint with the error type and description before propagating"
+          message="#[output application/json --- {message: 'refund-payment failed: ' ++ error.description, tracePoint: 'EXCEPTION'} ++ ({
+            paymentIntentId: vars.toolInput.paymentIntentId default 'unknown',
+            errorType: error.errorType.identifier default 'UNKNOWN',
+            errorDescription: error.description
+          })]"/>
+      </on-error-propagate>
+    </error-handler>
+  </flow>
+
+  <!-- ============================================================
+       TOOL 4: notify-team (Slack free workspace)
+       ============================================================ -->
+  <flow name="support-tools-notify-team-flow"
+    doc:name="Notify Team Tool"
+    doc:description="MCP tool that posts a support notification to the configured Slack channel">
+    <mcp:tool-listener config-ref="techwave-mcp-server-config" name="notify-team"
+      doc:name="Tool: notify-team"
+      doc:description="Exposes notify-team as an MCP tool that sends a message to the support Slack channel">
+      <mcp:description>Envia uma notificação para o canal do time de suporte no Slack. Use para avisar o time sobre cases criados ou reembolsos processados.</mcp:description>
+      <mcp:parameters-schema><![CDATA[{
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "message": { "type": "string", "description": "Mensagem a enviar ao canal de suporte", "minLength": 5, "maxLength": 1000 }
+        },
+        "required": ["message"]
+      }]]></mcp:parameters-schema>
+      <mcp:responses>
+        <mcp:text-tool-response-content text="#['Notificação enviada ao Slack: $(payload.ok)']"/>
+      </mcp:responses>
+      <mcp:on-error-responses>
+        <mcp:text-tool-response-content text="#['Erro ao notificar o time: $(error.description)']"/>
+      </mcp:on-error-responses>
+    </mcp:tool-listener>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Flow start"
+      doc:description="Logs START tracePoint for the notify-team tool"
+      message="#[output application/json --- {message: 'Tool notify-team invoked', tracePoint: 'START'}]"/>
+
+    <set-variable variableName="toolInput" value="#[payload]"
+      doc:name="Set toolInput"
+      doc:description="Stores the tool input (message) for the Slack post"/>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="Before Slack call"
+      doc:description="Logs BEFORE_REQUEST as the flow posts the message to Slack"
+      message="#[output application/json --- {message: 'Posting message to Slack', tracePoint: 'BEFORE_REQUEST'}]"/>
+
+    <http:request config-ref="slack-request-config" method="POST" path="/chat.postMessage"
+      doc:name="Post to Slack"
+      doc:description="POSTs the support message to the configured Slack channel via chat.postMessage">
+      <http:body><![CDATA[#[output application/json
+---
+{
+  channel: p('config.slack.channel'),
+  text: ":bell: *TechWave Suporte* — " ++ vars.toolInput.message
+}]]]></http:body>
+    </http:request>
+
+    <logger level="INFO" category="com.techwave.support.tools"
+      doc:name="After Slack call"
+      doc:description="Logs AFTER_REQUEST with the Slack ok flag from the response"
+      message="#[output application/json --- {message: 'Slack responded', tracePoint: 'AFTER_REQUEST'} ++ ({ ok: payload.ok default false })]"/>
+
+    <error-handler>
+      <on-error-propagate type="ANY" logException="false">
+        <logger level="ERROR" category="com.techwave.support.tools"
+          doc:name="Log tool error"
+          doc:description="Logs EXCEPTION tracePoint with the error type and description before propagating"
+          message="#[output application/json --- {message: 'notify-team failed: ' ++ error.description, tracePoint: 'EXCEPTION'} ++ ({
+            errorType: error.errorType.identifier default 'UNKNOWN',
+            errorDescription: error.description
+          })]"/>
+      </on-error-propagate>
+    </error-handler>
+  </flow>
+
+</mule>
