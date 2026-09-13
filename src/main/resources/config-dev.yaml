@@ -5,9 +5,9 @@ config:
   orders:
     # Order Support API exposta pelo Public Ingress Omni Gateway
     # Direct endpoint: <app-demo-order-support-api-host>.cloudhub.io
-    host: "<meetup-ingress-gw-host>.cloudhub.io"
+    host: "<ingress-gw-host>"
     basePath: "/techwave-order-support-api/api"
-    clientId: "c5c6e0588c6d4610855f0f08ade4fde0"
+    clientId: "<client_id-do-contrato>"
     # clientSecret é secure property: passada via -Dorders.clientSecret no deploy (nunca em YAML)
   stripe:
     host: "api.stripe.com"
@@ -16,4 +16,4 @@ config:
     username: "<salesforce-username>"
   slack:
     host: "slack.com"
-    channel: "#suporte-pedidos"
+    channel: "#support"

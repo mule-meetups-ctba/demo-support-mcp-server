@@ -39,7 +39,7 @@ Depois, no UI do Inspector:
 | `direct` | `https://<app-demo-support-mcp-server-host>.cloudhub.io/mcp` | Teste direto do app MCP, sem gateway. Melhor primeiro smoke test. |
 | `ingress` | `https://<meetup-ingress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp` | Teste do MCP via public ingress Omni Gateway. |
 | `egress` | `https://<meetup-egress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp` | Só deve funcionar de dentro da rede/Private Space. |
-| `agentNetworkEgress` | `https://<meetup-egress-gw-host>.cloudhub.io/9db424b9-11da-4408-b49e-8e944a38666a/mcpServer/mcpServerConnection` | Rota gerada pela Agent Network connection. Normalmente só o broker chama. |
+| `agentNetworkEgress` | `https://<meetup-egress-gw-host>.cloudhub.io/a75e4983-9a43-49c7-bfaa-b2e8d2b70a95/mcpServer/mcpServerConnection` | Rota gerada pela Agent Network connection. Normalmente só o broker chama. |
 
 ## Headers opcionais
 

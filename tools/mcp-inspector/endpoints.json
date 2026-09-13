@@ -20,7 +20,7 @@
   "agentNetworkEgress": {
     "name": "Agent Network MCP Connection",
     "transport": "streamable-http",
-    "url": "https://<meetup-egress-gw-host>.cloudhub.io/9db424b9-11da-4408-b49e-8e944a38666a/mcpServer/mcpServerConnection",
-    "description": "Generated Agent Network connection route used by the broker."
+    "url": "https://<meetup-egress-gw-host>.cloudhub.io/a75e4983-9a43-49c7-bfaa-b2e8d2b70a95/mcpServer/mcpServerConnection",
+    "description": "Rota gerada pela Agent Network connection. O path inclui o business group UUID; o host e o path mudam a cada (re)deploy da rede — confirme no Runtime Manager/API Manager."
   }
 }

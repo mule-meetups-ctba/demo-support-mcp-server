@@ -219,8 +219,13 @@ output application/json
       <mcp:responses>
         <mcp:text-tool-response-content text="#['Reembolso criado. Id: $(payload.refundId), status: $(payload.status)']"/>
       </mcp:responses>
+      <!-- O corpo da resposta do Stripe entra na mensagem de propósito.
+           `error.description` sozinho diz apenas "bad request (400)", e foi
+           exatamente isso que escondeu por três execuções o motivo real de um
+           reembolso recusado. Quem consome esta tool é um LLM: ele só consegue
+           explicar (ou corrigir) a falha se o motivo chegar junto. -->
       <mcp:on-error-responses>
-        <mcp:text-tool-response-content text="#['Erro ao criar reembolso: $(error.description)']"/>
+        <mcp:text-tool-response-content text="#['Erro ao criar reembolso: ' ++ (error.description default '') ++ ' | Stripe respondeu: ' ++ (write(error.errorMessage.payload, 'application/json') default 'sem corpo')]"/>
       </mcp:on-error-responses>
     </mcp:tool-listener>
 
@@ -307,7 +312,7 @@ output application/json
         "required": ["message"]
       }]]></mcp:parameters-schema>
       <mcp:responses>
-        <mcp:text-tool-response-content text="#['Notificação enviada ao Slack: $(payload.ok)']"/>
+        <mcp:text-tool-response-content text="#['Notificação enviada ao canal de suporte no Slack.']"/>
       </mcp:responses>
       <mcp:on-error-responses>
         <mcp:text-tool-response-content text="#['Erro ao notificar o time: $(error.description)']"/>
@@ -342,7 +347,20 @@ output application/json
     <logger level="INFO" category="com.techwave.support.tools"
       doc:name="After Slack call"
       doc:description="Logs AFTER_REQUEST with the Slack ok flag from the response"
-      message="#[output application/json --- {message: 'Slack responded', tracePoint: 'AFTER_REQUEST'} ++ ({ ok: payload.ok default false })]"/>
+      message="#[output application/json --- {message: 'Slack responded', tracePoint: 'AFTER_REQUEST'} ++ ({ ok: payload.ok default false, slackError: payload.error default null })]"/>
+
+    <!-- A Slack Web API sinaliza erro de NEGÓCIO no corpo, com HTTP 200:
+         {"ok": false, "error": "not_in_channel"}. Como <http:request> só falha
+         em 4xx/5xx, sem esta validação o flow seguiria como sucesso e o LLM leria
+         "notificação enviada" para uma mensagem que nunca chegou ao canal. -->
+    <choice doc:name="Slack aceitou a mensagem?"
+      doc:description="Converte o ok=false do corpo da resposta Slack em erro de verdade">
+      <when expression="#[(payload.ok default false) != true]">
+        <raise-error type="APP:SLACK_ERROR"
+          doc:name="Slack recusou a mensagem"
+          description="#['Slack recusou a mensagem: ' ++ (payload.error default 'erro desconhecido') ++ '. Verifique se o bot foi convidado para o canal (/invite @bot) e se o escopo chat:write está presente.']"/>
+      </when>
+    </choice>
 
     <error-handler>
       <on-error-propagate type="ANY" logException="false">
