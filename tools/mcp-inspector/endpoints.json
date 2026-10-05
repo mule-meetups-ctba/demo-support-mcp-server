@@ -2,25 +2,25 @@
   "direct": {
     "name": "Direct MCP Server",
     "transport": "streamable-http",
-    "url": "https://<app-demo-support-mcp-server-host>.cloudhub.io/mcp",
-    "description": "Direct CloudHub endpoint for the TechWave Support MCP Server."
+    "url": "https://<app-host>.cloudhub.io/mcp",
+    "description": "Direct CloudHub endpoint, BYPASSING the gateway. Useful only for local diagnosis — it skips Client ID Enforcement, rate limiting and the tool allow-list. Never expose it."
   },
   "ingress": {
     "name": "MCP via Public Ingress Omni Gateway",
     "transport": "streamable-http",
-    "url": "https://<meetup-ingress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp",
+    "url": "https://<ingress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp",
     "description": "Public Omni Gateway route for the MCP server. Add client_id/client_secret headers if policies require them."
   },
   "egress": {
     "name": "MCP via Private Egress Omni Gateway",
     "transport": "streamable-http",
-    "url": "https://<meetup-egress-gw-host>.cloudhub.io/techwave-support-mcp-server/mcp",
+    "url": "https://<egress-gw-host>.internal.cloudhub.io/techwave-support-mcp-server/mcp",
     "description": "Private egress route. Usually reachable only from inside the CloudHub Private Space."
   },
   "agentNetworkEgress": {
     "name": "Agent Network MCP Connection",
     "transport": "streamable-http",
-    "url": "https://<meetup-egress-gw-host>.cloudhub.io/a75e4983-9a43-49c7-bfaa-b2e8d2b70a95/mcpServer/mcpServerConnection",
+    "url": "https://<egress-gw-host>.internal.cloudhub.io/<organization-id>/mcpServer/mcpServerConnection",
     "description": "Rota gerada pela Agent Network connection. O path inclui o business group UUID; o host e o path mudam a cada (re)deploy da rede — confirme no Runtime Manager/API Manager."
   }
 }

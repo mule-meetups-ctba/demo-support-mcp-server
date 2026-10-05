@@ -4,15 +4,16 @@ config:
     port: "8081"
   orders:
     # Order Support API exposta pelo Public Ingress Omni Gateway
-    # Direct endpoint: <app-demo-order-support-api-host>.cloudhub.io
+    # Host publico do gateway, SEM https:// (o connector ja define protocol="HTTPS")
     host: "<ingress-gw-host>"
     basePath: "/techwave-order-support-api/api"
-    clientId: "<client_id-do-contrato>"
+    clientId: "<client_id do contrato mcp-server-to-orders-api>"
     # clientSecret é secure property: passada via -Dorders.clientSecret no deploy (nunca em YAML)
   stripe:
     host: "api.stripe.com"
     basePath: "/v1"
   salesforce:
+    # Username da org Salesforce. Password e securityToken sao secure properties.
     username: "<salesforce-username>"
   slack:
     host: "slack.com"
