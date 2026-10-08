@@ -7,8 +7,14 @@ Expõe capacidades de negócio para um LLM descobrir e invocar — não é um wr
 - **Consumido por:** [`demo-support-agent`](../demo-support-agent) e pelo broker da rede
 - **Runtime:** Mule 4.12 · Java 17 · CloudHub 2.0
 
-> Parte de uma demo com 4 repositórios. Arquitetura, walkthrough completo, políticas de gateway
-> e roteiro de apresentação: **`meetup-omni-material`**.
+> Parte de uma demo com quatro repositórios, que só faz sentido completa:
+>
+> - [`demo-order-support-api`](https://github.com/mule-meetups-ctba/demo-order-support-api) — API REST de pedidos + consulta do pagamento no Stripe
+> - [`demo-support-agent`](https://github.com/mule-meetups-ctba/demo-support-agent) — agente A2A com tool-calling
+> - [`demo-omni-agent-network`](https://github.com/mule-meetups-ctba/demo-omni-agent-network) — Agent Network 2.0 + broker em AgentScript
+>
+> A arquitetura, o passo a passo de deploy e as políticas de gateway estão
+> descritos no artigo que acompanha a demo.
 
 ## As quatro tools
 
